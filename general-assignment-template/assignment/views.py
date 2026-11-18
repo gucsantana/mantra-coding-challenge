@@ -36,3 +36,14 @@ class UserViewSet(viewsets.ViewSet):
             return Response(
                 {"error": "User not authenticated"}, status=status.HTTP_401_UNAUTHORIZED
             )
+
+class CardViewSet(viewsets.ViewSet):
+    """
+    ViewSet for card-related operations.
+    """
+
+    @action(detail=False, methods=["post"])
+    def reviews(self,request):
+        # Records one review result, returns timestamp for next due period
+        # actual spaced repetition logic will go in here
+        return True

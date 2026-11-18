@@ -1,5 +1,7 @@
 # from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.db import models
+from django.conf import settings
 
 
 class User(AbstractUser):
@@ -10,6 +12,14 @@ class User(AbstractUser):
 
     pass
 
-
-###############################################################################
-## TODO: Modify the following
+class Card(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="cards"
+    )
+    card_front = models.TextField()
+    card_back = models.TextField()
+    times_reviewed = models.PositiveIntegerField(default=0)
+    positive_streak = models.PositiveIntegerField(default=0)
+    next_review = models.DateTimeField()
