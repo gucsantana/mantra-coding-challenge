@@ -22,4 +22,5 @@ class Card(models.Model):
     card_back = models.TextField()
     times_reviewed = models.PositiveIntegerField(default=0)
     positive_streak = models.PositiveIntegerField(default=0)
+    last_failure = models.PositiveIntegerField(default=0)
     next_review = models.DateTimeField()

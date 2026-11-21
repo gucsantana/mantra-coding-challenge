@@ -7,6 +7,8 @@
 ```
 uv sync --all-groups
 
+uv run manage.py makemigrations
+
 uv run manage.py migrate
 ```
 
