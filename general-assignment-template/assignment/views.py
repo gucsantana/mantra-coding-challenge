@@ -6,7 +6,7 @@ from django.core.management import call_command
 from django.shortcuts import get_object_or_404
 
 from assignment.models import Card
-from assignment.serializers import CardSerializer, DueCardsQuerySerializer
+from assignment.serializers import CardSerializer, DueCardsQuerySerializer, ReviewQuerySerializer
 
 
 @api_view(["POST"])
@@ -49,6 +49,17 @@ def due_cards(request, user_id):
         status=status.HTTP_200_OK
     )
 
+# Records one review result, returns timestamp for next due period
+# fields required: user  ("user"), card id ("card"), review score ("review_score")
+@api_view(["POST"])
+def reviews(request):
+    # the query serializer validates the necessary inputs and fetches the associated data
+    query_serializer = ReviewQuerySerializer(data=request.data)
+    query_serializer.is_valid(raise_exception=True)
+
+    # actual spaced repetition logic will go in here
+    return True
+
 class UserViewSet(viewsets.ViewSet):
     """
     ViewSet for user-related operations.
@@ -67,14 +78,3 @@ class UserViewSet(viewsets.ViewSet):
             return Response(
                 {"error": "User not authenticated"}, status=status.HTTP_401_UNAUTHORIZED
             )
-
-class CardViewSet(viewsets.ViewSet):
-    """
-    ViewSet for card-related operations.
-    """
-
-    @action(detail=False, methods=["POST"])
-    def reviews(self,request):
-        # Records one review result, returns timestamp for next due period
-        # actual spaced repetition logic will go in here
-        return True
