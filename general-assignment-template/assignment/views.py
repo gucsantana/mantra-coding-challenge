@@ -63,7 +63,7 @@ def reviews(request):
         query_serializer.is_valid(raise_exception=True)
 
         # full algorithm logic can be found at README.md
-        STANDARD_DELAY = 2 # base value, in days, used for next review time calculations
+        STANDARD_DELAY = 2  # base value, in days, used for next review time calculations
         user = query_serializer.validated_data["user"]
         card_id = query_serializer.validated_data["card"].pk
         review_score = query_serializer.validated_data["review_score"]
@@ -76,7 +76,7 @@ def reviews(request):
 
         if review:
             # as long as the review being sent is an exact match, we just return its result,
-            if review.user == user and review.card == card and review.review_score == review_score:
+            if review.user == user and review.card == query_serializer.validated_data["card"] and review.review_score == review_score:
                 return Response(
                     {"next_review":review.next_review},
                     status=status.HTTP_200_OK
@@ -108,7 +108,7 @@ def reviews(request):
             card.positive_streak += 1
             card.times_reviewed += 1
             if review_score == 1: # review 1 is "remembered with some effort"
-                next_days = pow(STANDARD_DELAY,card.positive_streak) - pow(STANDARD_DELAY,card.positive_streak - 1)
+                next_days = pow(STANDARD_DELAY,card.positive_streak - 1)
             elif review_score == 2: # review 2 is "remembered easily"
                 next_days = pow(STANDARD_DELAY,card.positive_streak)
             else: # safeguard over an incorrect value slipping in this far
