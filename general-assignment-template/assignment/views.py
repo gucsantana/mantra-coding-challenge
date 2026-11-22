@@ -2,13 +2,14 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import api_view, action
 from rest_framework.response import Response
 
-from assignment.models import Card
+from assignment.models import Card, Review
 from assignment.serializers import CardSerializer, DueCardsQuerySerializer, ReviewQuerySerializer
 
 
@@ -53,57 +54,90 @@ def due_cards(request, user_id):
     )
 
 # Records one review result, returns timestamp for next due period
-# fields required: user  ("user"), card id ("card"), review score ("review_score")
+# fields required: user ("user"), card id ("card"), review score ("review_score"), idempotency key ("idempotency_key")
 @api_view(["POST"])
 def reviews(request):
-    # the query serializer validates the necessary inputs and fetches the associated data
-    query_serializer = ReviewQuerySerializer(data=request.data)
-    query_serializer.is_valid(raise_exception=True)
+    with transaction.atomic():
+        # the query serializer validates the necessary inputs and fetches the associated data
+        query_serializer = ReviewQuerySerializer(data=request.data)
+        query_serializer.is_valid(raise_exception=True)
 
-    # full algorithm logic can be found at README.md
-    STANDARD_DELAY = 2 # base value, in days, used for next review time calculations
-    user = query_serializer.validated_data["user"]
-    card = query_serializer.validated_data["card"]
-    review_score = query_serializer.validated_data["review_score"]
+        # full algorithm logic can be found at README.md
+        STANDARD_DELAY = 2 # base value, in days, used for next review time calculations
+        user = query_serializer.validated_data["user"]
+        card_id = query_serializer.validated_data["card"].pk
+        review_score = query_serializer.validated_data["review_score"]
+        idempotency_key = query_serializer.validated_data["idempotency_key"]
 
-    # prohibit a user from reviewing a card from another; just a safeguard, since the front-end is the one that should ensure this scenario
-    if card.user != user:
-        return Response( 
-            {"detail": "Card does not belong to the supplied user"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        # see if this idempotency key already exists in our event data, and return that result if so
+        review = Review.objects.select_for_update().filter(
+            idempotency_key=idempotency_key
+        ).first()
 
-    if review_score == 0:
-        # review 0 is the failure state - "don't know"
-        card.positive_streak = 0
-        card.times_reviewed += 1
-        card.last_failure = card.times_reviewed
-        card.next_review = timezone.now() + timedelta(minutes=1)
-    else:
-        card.positive_streak += 1
-        card.times_reviewed += 1
-        if review_score == 1: # review 1 is "remembered with some effort"
-            next_days = pow(STANDARD_DELAY,card.positive_streak) - pow(STANDARD_DELAY,card.positive_streak - 1)
-        elif review_score == 2: # review 2 is "remembered easily"
-            next_days = pow(STANDARD_DELAY,card.positive_streak)
-        else: # safeguard over an incorrect value slipping in this far
+        if review:
+            # as long as the review being sent is an exact match, we just return its result,
+            if review.user == user and review.card == card and review.review_score == review_score:
+                return Response(
+                    {"next_review":review.next_review},
+                    status=status.HTTP_200_OK
+                )
+            # else, there's a conflict and we abort this call entirely
+            else:
+                return Response(
+                    {"detail":"There is a conflict in the data received."},
+                    status=status.HTTP_409_CONFLICT
+                )
+            
+        # card selected like this instead of plain grab from serializer so it's locked for the transaction
+        card = Card.objects.select_for_update().select_related("user").get( pk=card_id )
+
+        # prohibit a user from reviewing a card from another; just a safeguard, since the front-end is the one that should ensure this scenario
+        if card.user != user:
             return Response( 
-                {"detail": "Review score was outside of the accepted range (0-2)"},
+                {"detail": "Card does not belong to the supplied user"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # date of the next review is assigned as midnight X days from now, defined by next_days
-        card.next_review = timezone.localtime(timezone.now()).replace(
-            hour=0,minute=0,second=0,microsecond=0
-        ) + timedelta(days=next_days)
+        if review_score == 0:
+            # review 0 is the failure state - "don't know"
+            card.positive_streak = 0
+            card.times_reviewed += 1
+            card.last_failure = card.times_reviewed
+            card.next_review = timezone.now() + timedelta(minutes=1)
+        else:
+            card.positive_streak += 1
+            card.times_reviewed += 1
+            if review_score == 1: # review 1 is "remembered with some effort"
+                next_days = pow(STANDARD_DELAY,card.positive_streak) - pow(STANDARD_DELAY,card.positive_streak - 1)
+            elif review_score == 2: # review 2 is "remembered easily"
+                next_days = pow(STANDARD_DELAY,card.positive_streak)
+            else: # safeguard over an incorrect value slipping in this far
+                return Response( 
+                    {"detail": "Review score was outside of the accepted range (0-2)"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-    # after calculations are done, persist the values
-    card.save(update_fields=["positive_streak","times_reviewed","last_failure","next_review"])
+            # date of the next review is assigned as midnight X days from now, defined by next_days
+            card.next_review = timezone.localtime(timezone.now()).replace(
+                hour=0,minute=0,second=0,microsecond=0
+            ) + timedelta(days=next_days)
 
-    return Response(
-        card.next_review,
-        status=status.HTTP_200_OK
-    )
+        # after calculations are done, persist the values
+        card.save(update_fields=["positive_streak","times_reviewed","last_failure","next_review"])
+
+        # finally, persist data for the review itself
+        Review.objects.create(
+            idempotency_key=idempotency_key,
+            card = card,
+            user = user,
+            review_score = review_score,
+            next_review = card.next_review,
+        )
+
+        return Response(
+            {"next_review":card.next_review},
+            status=status.HTTP_200_OK
+        )
 
 class UserViewSet(viewsets.ViewSet):
     """

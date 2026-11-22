@@ -24,3 +24,11 @@ class Card(models.Model):
     positive_streak = models.PositiveIntegerField(default=0)
     last_failure = models.PositiveIntegerField(default=0)
     next_review = models.DateTimeField()
+
+class Review(models.Model):
+    idempotency_key = models.CharField(max_length=64, unique=True)
+    card = models.ForeignKey(Card, on_delete=models.CASCADE, related_name="reviews")
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    review_score = models.PositiveSmallIntegerField()
+    next_review = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
