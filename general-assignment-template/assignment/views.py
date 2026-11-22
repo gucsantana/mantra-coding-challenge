@@ -1,9 +1,12 @@
-from rest_framework import status, viewsets
-from rest_framework.decorators import api_view, action
-from rest_framework.response import Response
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from rest_framework import status, viewsets
+from rest_framework.decorators import api_view, action
+from rest_framework.response import Response
 
 from assignment.models import Card
 from assignment.serializers import CardSerializer, DueCardsQuerySerializer, ReviewQuerySerializer
@@ -57,8 +60,50 @@ def reviews(request):
     query_serializer = ReviewQuerySerializer(data=request.data)
     query_serializer.is_valid(raise_exception=True)
 
-    # actual spaced repetition logic will go in here
-    return True
+    # full algorithm logic can be found at README.md
+    STANDARD_DELAY = 2 # base value, in days, used for next review time calculations
+    user = query_serializer.validated_data["user"]
+    card = query_serializer.validated_data["card"]
+    review_score = query_serializer.validated_data["review_score"]
+
+    # prohibit a user from reviewing a card from another; just a safeguard, since the front-end is the one that should ensure this scenario
+    if card.user != user:
+        return Response( 
+            {"detail": "Card does not belong to the supplied user"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if review_score == 0:
+        # review 0 is the failure state - "don't know"
+        card.positive_streak = 0
+        card.times_reviewed += 1
+        card.last_failure = card.times_reviewed
+        card.next_review = timezone.now() + timedelta(minutes=1)
+    else:
+        card.positive_streak += 1
+        card.times_reviewed += 1
+        if review_score == 1: # review 1 is "remembered with some effort"
+            next_days = pow(STANDARD_DELAY,card.positive_streak) - pow(STANDARD_DELAY,card.positive_streak - 1)
+        elif review_score == 2: # review 2 is "remembered easily"
+            next_days = pow(STANDARD_DELAY,card.positive_streak)
+        else: # safeguard over an incorrect value slipping in this far
+            return Response( 
+                {"detail": "Review score was outside of the accepted range (0-2)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # date of the next review is assigned as midnight X days from now, defined by next_days
+        card.next_review = timezone.localtime(timezone.now()).replace(
+            hour=0,minute=0,second=0,microsecond=0
+        ) + timedelta(days=next_days)
+
+    # after calculations are done, persist the values
+    card.save(update_fields=["positive_streak","times_reviewed","last_failure","next_review"])
+
+    return Response(
+        card.next_review,
+        status=status.HTTP_200_OK
+    )
 
 class UserViewSet(viewsets.ViewSet):
     """

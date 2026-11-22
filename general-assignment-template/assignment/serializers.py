@@ -15,4 +15,4 @@ class DueCardsQuerySerializer(serializers.Serializer):
 class ReviewQuerySerializer(serializers.Serializer):
     user = serializers.PrimaryKeyRelatedField( queryset = User.objects.all() )
     card = serializers.PrimaryKeyRelatedField( queryset = Card.objects.all() )
-    review_score = serializers.IntegerField(min=0,max=2)
+    review_score = serializers.IntegerField(min_value=0,max_value=2)
