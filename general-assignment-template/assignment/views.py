@@ -105,7 +105,7 @@ def reviews(request):
             # actual review score logic:
             if review_score == 0:
                 # review 0 is the failure state - "don't know"
-                card.positive_streak = 0
+                # card.positive_streak = 0
                 card.times_reviewed += 1
                 card.last_failure = card.times_reviewed
                 card.next_review = timezone.now() + timedelta(minutes=1)
