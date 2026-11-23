@@ -19,7 +19,7 @@ dev = [
 ]
 
 [tool.poe.env]
-DJANGO_SETTINGS_MODULE = "assignment.settings"
+DJANGO_SETTINGS_MODULE = "assignment.test_settings"
 
 [tool.poe.tasks]
 lint = "ruff check --fix ."
