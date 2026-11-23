@@ -98,6 +98,14 @@ Lastly, the card on the database is updated with the newly calculated informatio
 
 ---
 
+## Performance and trade-offs
+
+The due_cards query filters by user and next_review; a composite database index on those fields is intended to help that lookup. It costs additional storage and adds some overhead to card writes.
+
+Review updates run in a database transaction and lock the card row. This protects the state when reviews for the same card arrive concurrently, but those requests must wait on each other. Reviews for different cards can proceed independently. A unique constraint on idempotency_key prevents duplicate records, at the cost of storing and indexing each review.
+
+---
+
 ## API Specification
 
 No authentication is required for the required API endpoints.

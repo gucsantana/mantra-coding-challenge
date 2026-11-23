@@ -86,7 +86,7 @@ def reviews(request):
                 # as long as the review being sent is an exact match, we just return its result,
                 if review.user == user and review.card == query_serializer.validated_data["card"] and review.review_score == review_score:
                     return Response(
-                        {"next_review":review.next_review},
+                        {"next_review":timezone.localtime(review.next_review)},
                         status=status.HTTP_200_OK
                     )
                 # else, there's a conflict and we abort this call entirely
@@ -155,7 +155,7 @@ def reviews(request):
         # as long as the review being sent is an exact match, we just return its result,
         if existing_review.user == user and existing_review.card == query_serializer.validated_data["card"] and existing_review.review_score == review_score:
             return Response(
-                {"next_review":existing_review.next_review},
+                {"next_review":timezone.localtime(existing_review.next_review)},
                 status=status.HTTP_200_OK
             )
         # else, there's a conflict and we abort this call entirely
