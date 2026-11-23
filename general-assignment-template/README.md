@@ -16,7 +16,7 @@ uv run manage.py migrate
 
 ### Install and run PostgreSQL
 
-This API uses PostgreSQL for data persistence, falling back to SQLite when not present.
+The API uses PostgreSQL when configured and falls back to SQLite otherwise. The test suite always requires PostgreSQL; its test settings will fail explicitly rather than silently using SQLite.
 Installing the PostgreSQL engine on your machine is outside the scope of this document.
 
 Run the following commands on the psql shell - the \password command will then prompt you to create a password:
@@ -42,6 +42,8 @@ uv run manage.py shell -c "from django.db import connection; print(connection.ve
 ```
 
 ### Run tests
+
+Configure PostgreSQL and set the `DB_ENGINE`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD` environment variables as described above. The test role must be allowed to create the temporary test database.
 
 ```
 uv run poe test
@@ -82,11 +84,13 @@ Now for the actual review score processing:
 * For a review score of 1 ("remembered with effort"), the time for the next review is contingent on the current streak, calculated as (2 ** (streak - 1)). This means that, for example, answering 1 for the first review of a card returns a delay of 1 day (2 ** 0), while answering 1 for the fifth positive review of a streak returns a delay of 16 days (2 ** 4)
 * For a review score of 2 ("remembered easily"), the time for the next review is also contingent on the current streak, calculated as (2 ** streak). For example, answering 2 for the first review of a card returns a delay of 2 days (2 ** 1), while answering 2 for the fifth positive review of a streak returns a delay of 32 days (2 ** 5)
 
-This follows the monotonic requirement, since subsequent positive answers will at most match the previous wait duration, never be lower. As a direct example, answering 2 on the sixth consecutive positive review of a card will return a delay of 64 days (2 ** 6), and answering 1 on the next review of the same card will also return a delay of 64 days (2 ** (7-1)). This also complies with rule 2 (spacing logic), since a 2 review will always provide a longer interval than a 1 review.
+This follows the monotonic requirement, since subsequent positive answers will at most match the previous wait duration, never be lower. As a direct example, answering 2 on the sixth consecutive positive review of a card will return a delay of 64 days (2 ** 6), and answering 1 on the next review of the same card will also return a delay of 64 days (2 ** (7-1)). This also complies with rule 2 (spacing logic), since a 2 review will essentially always provide a longer interval than a 1 review (until the user hits the exponent cap as explained below, in which case both will return the same delay).
 
-I also included a hard cap on the exponent used for positive streak calculations. The score 1 delay is capped at 2 ** 10 (1024) days, and the score 2 delay is capped at the same maximum. This ensures a positive review can never schedule a card farther out than 1024 days and prevents a lower streak multiplier from shortening the interval after the cap is reached.
+I also included a hard cap on the exponent used for positive streak calculations. The score 1 delay is capped at 2 ** 10 (1024) days, and the score 2 delay is capped at the same maximum. This ensures a positive review can never schedule a card farther out than 1024 days and prevents an answer of 1 from shortening the interval after the cap is reached.
 
-I will suggest resetting the streak on a review score 0, which doesn't strictly comply with the monotonic requirement, but it's logically sound (words you do not know anymore should be relearned from scratch to maximize retention), and it matches what the popular SRS app Anki does as well. There is a commented-out line that resets the streak on the logic for review score 0.
+Two suggestions: first, resetting the streak on a review score 0, which doesn't strictly comply with the monotonic requirement, but it's logically sound (words you do not know anymore should be relearned from scratch to maximize retention), and it matches what the popular SRS app Anki does as well. There is a commented-out line that resets the streak on the logic for review score 0.
+
+Second, modifying the streak cap so that, essentially, an answer 1 caps at exponent 9, and an answer 2 caps at exponent 10. This does mean that monotonicity can be violated if the user answers 1 after having answered 2 before while already at the cap, but I believe it makes more logical sense to have differing intervals at the edge than both having the same interval. Removing the cap entirely opens up the system to hitting a timedelta overflow eventually.
 
 Times are all set in the Asia/Tokyo timezone.
 
