@@ -73,7 +73,8 @@ def reviews(request):
             
             # card selected like this instead of plain grab from serializer so it's locked for the transaction
             card = get_object_or_404(
-                Card.objects.select_for_update().select_related("user").get( pk=card_id )
+                Card.objects.select_for_update().select_related("user"),
+                pk=card_id,
             )
 
             # see if this idempotency key already exists in our event data, and return that result if so
@@ -113,14 +114,15 @@ def reviews(request):
                 card.positive_streak += 1
                 card.times_reviewed += 1
                 if review_score == 1: # review 1 is "remembered with some effort"
-                    next_days = pow(STANDARD_DELAY,card.positive_streak - 1)
+                    exponent = min(card.positive_streak - 1, 10)
                 elif review_score == 2: # review 2 is "remembered easily"
-                    next_days = pow(STANDARD_DELAY,card.positive_streak)
+                    exponent = min(card.positive_streak, 10)
                 else: # safeguard over an incorrect value slipping in this far
                     return Response( 
                         {"detail": "Review score was outside of the accepted range (0-2)"},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                next_days = pow(STANDARD_DELAY, exponent)
 
                 # date of the next review is assigned as midnight X days from now, defined by next_days
                 card.next_review = timezone.localtime(timezone.now()).replace(

@@ -84,6 +84,8 @@ Now for the actual review score processing:
 
 This follows the monotonic requirement, since subsequent positive answers will at most match the previous wait duration, never be lower. As a direct example, answering 2 on the sixth consecutive positive review of a card will return a delay of 64 days (2 ** 6), and answering 1 on the next review of the same card will also return a delay of 64 days (2 ** (7-1)). This also complies with rule 2 (spacing logic), since a 2 review will always provide a longer interval than a 1 review.
 
+I also included a hard cap on the exponent used for positive streak calculations. The score 1 delay is capped at 2 ** 10 (1024) days, and the score 2 delay is capped at the same maximum. This ensures a positive review can never schedule a card farther out than 1024 days and prevents a lower streak multiplier from shortening the interval after the cap is reached.
+
 I will suggest resetting the streak on a review score 0, which doesn't strictly comply with the monotonic requirement, but it's logically sound (words you do not know anymore should be relearned from scratch to maximize retention), and it matches what the popular SRS app Anki does as well. There is a commented-out line that resets the streak on the logic for review score 0.
 
 Times are all set in the Asia/Tokyo timezone.
