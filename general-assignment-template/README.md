@@ -78,7 +78,7 @@ Inside an atomic transaction (for smooth rollback if issues arise), we lock that
 There is also a safeguard against a user editing a card that is not his, although realistically this should also be handled first by the front-end.
 
 Now for the actual review score processing:
-* For a review score of 0 ("do not remember at all"), the current streak will be reset, and the next review is scheduled for one minute from the current time
+* For a review score of 0 ("do not remember at all"), the next review is scheduled for one minute from the current time
 * For a review score of 1 ("remembered with effort"), the time for the next review is contingent on the current streak, calculated as (2 ** (streak - 1)). This means that, for example, answering 1 for the first review of a card returns a delay of 1 day (2 ** 0), while answering 1 for the fifth positive review of a streak returns a delay of 16 days (2 ** 4)
 * For a review score of 2 ("remembered easily"), the time for the next review is also contingent on the current streak, calculated as (2 ** streak). For example, answering 2 for the first review of a card returns a delay of 2 days (2 ** 1), while answering 2 for the fifth positive review of a streak returns a delay of 32 days (2 ** 5)
 

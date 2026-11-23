@@ -108,7 +108,7 @@ def reviews(request):
                 # card.positive_streak = 0
                 card.times_reviewed += 1
                 card.last_failure = card.times_reviewed
-                card.next_review = timezone.now() + timedelta(minutes=1)
+                card.next_review = timezone.localtime(timezone.now()) + timedelta(minutes=1)
             else:
                 card.positive_streak += 1
                 card.times_reviewed += 1
